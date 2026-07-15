@@ -1,0 +1,21 @@
+# Build artifacts & caches — never needed inside the image build context.
+.gradle/
+build/
+out/
+bin/
+
+# IDE / OS noise
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Secrets & local env — must not leak into the image
+.env
+.env.local
+*.env
+
+# VCS
+.git/
+.gitignore
