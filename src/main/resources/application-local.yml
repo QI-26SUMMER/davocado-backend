@@ -1,0 +1,14 @@
+# Local development profile.
+# Sensitive values still come from environment variables (see .env.example) — nothing secret here.
+spring:
+  jpa:
+    hibernate:
+      # Convenient during local schema iteration; production uses `validate`.
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    show-sql: true
+
+# Verbose logging for local debugging.
+logging:
+  level:
+    org.hibernate.SQL: debug
+    com.davocado.server: debug
