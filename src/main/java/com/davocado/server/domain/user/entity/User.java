@@ -65,4 +65,19 @@ public class User {
         this.passwordHash = passwordHash;
         this.nickname = nickname;
     }
+
+    /** Records a successful login at the given instant. */
+    public void updateLastLogin(Instant at) {
+        this.lastLoginAt = at;
+    }
+
+    /** Updates only the non-null fields, leaving the rest unchanged. */
+    public void updateProfile(String nickname, String pushToken) {
+        if (nickname != null) {
+            this.nickname = nickname;
+        }
+        if (pushToken != null) {
+            this.pushToken = pushToken;
+        }
+    }
 }

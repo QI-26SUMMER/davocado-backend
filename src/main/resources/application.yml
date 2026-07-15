@@ -26,6 +26,7 @@ spring:
   # Bean Validation / Jackson operate on UTC as well (see JVM timezone below).
   jackson:
     time-zone: UTC
+    property-naming-strategy: SNAKE_CASE
 
 # JWT settings — secret injected from env, never hard-coded.
 # Single access token (no refresh); longer TTL for usability on mobile.
