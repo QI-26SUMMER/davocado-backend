@@ -85,4 +85,24 @@ public class Avocado {
         this.targetStage = targetStage;
         this.status = "tracking";
     }
+
+    /** Updates only the non-null fields, leaving the rest unchanged. */
+    public void updateSettings(String storageCondition, Integer targetStage, String nickname) {
+        if (storageCondition != null) {
+            this.storageCondition = storageCondition;
+        }
+        if (targetStage != null) {
+            this.targetStage = targetStage;
+        }
+        if (nickname != null) {
+            this.nickname = nickname;
+        }
+    }
+
+    /** Updates the tracking status ({@code tracking}/{@code consumed}/{@code discarded}). */
+    public void updateStatus(String status) {
+        if (status != null) {
+            this.status = status;
+        }
+    }
 }
