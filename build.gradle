@@ -1,0 +1,68 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.4.2'          // Spring Boot 3.x (latest stable line)
+    id 'io.spring.dependency-management' version '1.1.7'    // manages Spring/starter dependency versions (BOM)
+}
+
+group = 'com.davocado'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)       // Java 21 (LTS) — fixed stack requirement
+    }
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+// jjwt version pinned in one place so api/impl/jackson stay in sync
+ext {
+    jjwtVersion = '0.12.6'
+}
+
+dependencies {
+    // --- Web / REST ---
+    implementation 'org.springframework.boot:spring-boot-starter-web'          // REST controllers, embedded Tomcat, JSON
+
+    // --- Persistence ---
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'     // JPA/Hibernate, repositories, transactions
+
+    // --- Validation ---
+    implementation 'org.springframework.boot:spring-boot-starter-validation'   // @Valid / Bean Validation on DTOs
+
+    // --- Security ---
+    implementation 'org.springframework.boot:spring-boot-starter-security'     // auth filter chain + BCrypt password hashing
+
+    // --- JWT (access token issue/verify) ---
+    implementation "io.jsonwebtoken:jjwt-api:${jjwtVersion}"                    // JWT public API
+    runtimeOnly    "io.jsonwebtoken:jjwt-impl:${jjwtVersion}"                   // JWT runtime implementation
+    runtimeOnly    "io.jsonwebtoken:jjwt-jackson:${jjwtVersion}"                // JSON (de)serialization of JWT claims via Jackson
+
+    // --- API documentation ---
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.3'   // Swagger UI + OpenAPI 3 auto docs
+
+    // --- Database driver ---
+    runtimeOnly 'org.postgresql:postgresql'                                     // PostgreSQL JDBC driver (runtime only)
+
+    // --- Boilerplate reduction ---
+    compileOnly        'org.projectlombok:lombok'                               // @Getter/@Builder/etc. at compile time
+    annotationProcessor 'org.projectlombok:lombok'                             // Lombok annotation processing
+
+    // --- Testing ---
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'      // JUnit 5, Mockito, Spring test support
+    testImplementation 'org.springframework.security:spring-security-test'      // security-aware MockMvc helpers
+    testRuntimeOnly    'com.h2database:h2'                                       // in-memory DB for tests (no external Postgres needed)
+    testRuntimeOnly    'org.junit.platform:junit-platform-launcher'             // JUnit 5 test launcher
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
