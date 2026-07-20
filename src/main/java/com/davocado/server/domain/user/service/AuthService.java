@@ -5,6 +5,7 @@ import com.davocado.server.domain.user.dto.PasswordResetRequest;
 import com.davocado.server.domain.user.dto.SignupRequest;
 import com.davocado.server.domain.user.dto.SignupResponse;
 import com.davocado.server.domain.user.dto.TokenResponse;
+import com.davocado.server.domain.user.dto.UserSummary;
 import com.davocado.server.domain.user.entity.User;
 import com.davocado.server.domain.user.repository.UserRepository;
 import com.davocado.server.global.auth.JwtTokenProvider;
@@ -34,12 +35,11 @@ public class AuthService {
 
     @Transactional
     public SignupResponse signup(SignupRequest request) {
-        if (userRepository.existsByLoginId(request.loginId())) {
-            throw new BusinessException(ErrorCode.DUPLICATE_LOGIN_ID);
+        if (userRepository.existsByEmail(request.email())) {
+            throw new BusinessException(ErrorCode.DUPLICATE_EMAIL);
         }
 
         User user = User.builder()
-                .loginId(request.loginId())
                 .email(request.email())
                 .passwordHash(passwordEncoder.encode(request.password()))
                 .nickname(request.nickname())
@@ -51,7 +51,7 @@ public class AuthService {
     @Transactional
     public TokenResponse login(LoginRequest request) {
         User user = userRepository
-                .findByLoginId(request.loginId())
+                .findByEmail(request.email())
                 .orElseThrow(() -> new BusinessException(ErrorCode.INVALID_CREDENTIALS));
 
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
@@ -61,7 +61,19 @@ public class AuthService {
         user.updateLastLogin(Instant.now());
 
         String token = jwtTokenProvider.createToken(user.getId());
-        return TokenResponse.of(token, jwtTokenProvider.getAccessTokenValiditySeconds());
+        return TokenResponse.of(
+                token, jwtTokenProvider.getAccessTokenValiditySeconds(), UserSummary.from(user));
+    }
+
+    /**
+     * Clears the caller's push token so the device stops receiving notifications.
+     *
+     * <p>The token itself stays valid until it expires — this is a single-token design with no
+     * server-side blacklist.
+     */
+    @Transactional
+    public void logout(Long userId) {
+        userRepository.findById(userId).ifPresent(User::clearPushToken);
     }
 
     /**

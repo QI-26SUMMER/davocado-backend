@@ -38,9 +38,13 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Open endpoints: auth flow, health check, API docs.
+                        // Open endpoints: pre-login auth flow, health check, API docs.
+                        // /auth/logout is deliberately excluded — it clears the caller's push token,
+                        // so it needs to know who is calling.
                         .requestMatchers(
-                                "/auth/**",
+                                "/auth/signup",
+                                "/auth/login",
+                                "/auth/password/reset",
                                 "/health",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",

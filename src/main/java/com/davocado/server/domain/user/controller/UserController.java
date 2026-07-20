@@ -1,6 +1,10 @@
 package com.davocado.server.domain.user.controller;
 
+import com.davocado.server.domain.user.dto.PushTokenRequest;
+import com.davocado.server.domain.user.dto.PushTokenResponse;
+import com.davocado.server.domain.user.dto.SettingsResponse;
 import com.davocado.server.domain.user.dto.UpdateMeRequest;
+import com.davocado.server.domain.user.dto.UpdateSettingsRequest;
 import com.davocado.server.domain.user.dto.UserResponse;
 import com.davocado.server.domain.user.service.UserService;
 import com.davocado.server.global.auth.CurrentUserId;
@@ -9,6 +13,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,5 +37,17 @@ public class UserController {
     public ResponseEntity<ApiResponse<UserResponse>> updateMe(
             @CurrentUserId Long userId, @Valid @RequestBody UpdateMeRequest request) {
         return ResponseEntity.ok(ApiResponse.success(userService.updateMe(userId, request)));
+    }
+
+    @PatchMapping("/me/settings")
+    public ResponseEntity<ApiResponse<SettingsResponse>> updateSettings(
+            @CurrentUserId Long userId, @Valid @RequestBody UpdateSettingsRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(userService.updateSettings(userId, request)));
+    }
+
+    @PutMapping("/me/push-token")
+    public ResponseEntity<ApiResponse<PushTokenResponse>> registerPushToken(
+            @CurrentUserId Long userId, @Valid @RequestBody PushTokenRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(userService.registerPushToken(userId, request)));
     }
 }

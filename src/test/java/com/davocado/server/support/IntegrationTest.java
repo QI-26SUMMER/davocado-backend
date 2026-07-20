@@ -36,9 +36,9 @@ public abstract class IntegrationTest {
     protected ObjectMapper objectMapper;
 
     /** Signs up a fresh user with the given credentials and returns their access token. */
-    protected String signupAndLogin(String loginId, String password) throws Exception {
+    protected String signupAndLogin(String email, String password) throws Exception {
         Map<String, Object> signupBody = Map.of(
-                "login_id", loginId,
+                "email", email,
                 "password", password);
         mockMvc.perform(post("/auth/signup")
                         .with(csrf())
@@ -47,7 +47,7 @@ public abstract class IntegrationTest {
                 .andExpect(status().isCreated());
 
         Map<String, Object> loginBody = Map.of(
-                "login_id", loginId,
+                "email", email,
                 "password", password);
         MvcResult result = mockMvc.perform(post("/auth/login")
                         .with(csrf())

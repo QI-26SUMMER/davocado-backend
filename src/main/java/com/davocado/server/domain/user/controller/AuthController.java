@@ -6,6 +6,7 @@ import com.davocado.server.domain.user.dto.SignupRequest;
 import com.davocado.server.domain.user.dto.SignupResponse;
 import com.davocado.server.domain.user.dto.TokenResponse;
 import com.davocado.server.domain.user.service.AuthService;
+import com.davocado.server.global.auth.CurrentUserId;
 import com.davocado.server.global.common.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -38,8 +39,10 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout() {
-        // Single-token design, no server-side blacklist — the client simply discards its token.
+    public ResponseEntity<Void> logout(@CurrentUserId Long userId) {
+        // Single-token design, no server-side blacklist — the client discards its token. The server
+        // only clears the push token so this device stops receiving notifications.
+        authService.logout(userId);
         return ResponseEntity.noContent().build();
     }
 
