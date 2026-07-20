@@ -31,6 +31,14 @@ bin/
 *.env
 !.env.example
 
+# GCP service account keys. The real key lives outside the repo; these patterns
+# are a backstop in case one is ever copied in by mistake.
+*-key.json
+*-credentials.json
+service-account*.json
+gcp-*.json
+application_default_credentials.json
+
 # --- OS ---
 .DS_Store
 Thumbs.db

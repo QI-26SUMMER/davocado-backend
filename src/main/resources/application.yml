@@ -26,12 +26,39 @@ spring:
   # Bean Validation / Jackson operate on UTC as well (see JVM timezone below).
   jackson:
     time-zone: UTC
+    property-naming-strategy: SNAKE_CASE
+
+  # Scan uploads are single phone photos; anything larger is rejected with FILE_TOO_LARGE.
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
 
 # JWT settings — secret injected from env, never hard-coded.
 # Single access token (no refresh); longer TTL for usability on mobile.
 jwt:
   secret: ${JWT_SECRET}
   access-token-validity-seconds: ${JWT_ACCESS_TTL:1209600}   # 14 days
+
+# Google Cloud Storage. Credentials come from GOOGLE_APPLICATION_CREDENTIALS (ADC) —
+# never configured inline. Leaving the bucket blank disables GCS: image URLs come back
+# null instead of failing, which is what tests and un-provisioned environments rely on.
+gcs:
+  bucket: ${GCS_BUCKET:}
+  signed-url-ttl-minutes: ${GCS_SIGNED_URL_TTL_MINUTES:15}
+
+# AI inference service. A blank base-url leaves scanning disabled (502) rather than
+# preventing startup, so the rest of the API stays usable before the service is deployed.
+# Timeouts are generous: the service scales to zero, so the first call pays a cold start.
+ai:
+  base-url: ${AI_BASE_URL:}
+  predict-path: ${AI_PREDICT_PATH:/predict}
+  connect-timeout-seconds: ${AI_CONNECT_TIMEOUT_SECONDS:10}
+  read-timeout-seconds: ${AI_READ_TIMEOUT_SECONDS:60}
+  # The Cloud Run service is private, so requests carry a Google-signed ID token (from ADC).
+  # Set false only when pointing at a public/mock endpoint. Audience defaults to base-url.
+  use-id-token: ${AI_USE_ID_TOKEN:true}
+  audience: ${AI_AUDIENCE:}
 
 # Swagger UI at /swagger-ui.html, spec at /v3/api-docs
 springdoc:

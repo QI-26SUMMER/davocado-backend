@@ -1,5 +1,7 @@
 package com.davocado.server.global.config;
 
+import com.davocado.server.global.auth.JwtAuthenticationEntryPoint;
+import com.davocado.server.global.auth.JwtAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -8,15 +10,26 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
- * Security skeleton.
+ * Security configuration.
  *
- * <p>Stateless, CSRF disabled (token-based auth). Public endpoints are open now; everything else
- * requires authentication. The JWT authentication filter is NOT wired in yet.
+ * <p>Stateless, CSRF disabled (token-based auth). Public endpoints are open; everything else
+ * requires a valid JWT, enforced by {@link JwtAuthenticationFilter}.
  */
 @Configuration
 public class SecurityConfig {
+
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+
+    public SecurityConfig(
+            JwtAuthenticationFilter jwtAuthenticationFilter,
+            JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint) {
+        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+        this.jwtAuthenticationEntryPoint = jwtAuthenticationEntryPoint;
+    }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -25,9 +38,13 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Open endpoints: auth flow, health check, API docs.
+                        // Open endpoints: pre-login auth flow, health check, API docs.
+                        // /auth/logout is deliberately excluded — it clears the caller's push token,
+                        // so it needs to know who is calling.
                         .requestMatchers(
-                                "/auth/**",
+                                "/auth/signup",
+                                "/auth/login",
+                                "/auth/password/reset",
                                 "/health",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
@@ -35,12 +52,9 @@ public class SecurityConfig {
                         ).permitAll()
                         // TODO: tighten per-endpoint rules once real APIs land.
                         .anyRequest().authenticated()
-                );
-
-        // TODO: register the JWT authentication filter here once implemented
-        //       (global.auth.JwtAuthenticationFilter), e.g.:
-        //       http.addFilterBefore(jwtAuthenticationFilter,
-        //               UsernamePasswordAuthenticationFilter.class);
+                )
+                .exceptionHandling(e -> e.authenticationEntryPoint(jwtAuthenticationEntryPoint))
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
