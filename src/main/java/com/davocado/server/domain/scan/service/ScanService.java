@@ -8,16 +8,24 @@ import com.davocado.server.domain.scan.dto.ScanResponse;
 import com.davocado.server.domain.scan.dto.ScanStatsResponse;
 import com.davocado.server.domain.scan.entity.Image;
 import com.davocado.server.domain.scan.entity.Scan;
+import com.davocado.server.domain.scan.infra.PredictionResult;
+import com.davocado.server.domain.scan.infra.RipenessPredictor;
 import com.davocado.server.domain.scan.repository.ImageRepository;
 import com.davocado.server.domain.scan.repository.ScanRepository;
+import com.davocado.server.domain.user.entity.User;
+import com.davocado.server.domain.user.repository.UserRepository;
 import com.davocado.server.global.exception.BusinessException;
 import com.davocado.server.global.exception.ErrorCode;
+import com.davocado.server.global.storage.ImageStorage;
 import com.davocado.server.global.storage.ImageUrlSigner;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,20 +39,79 @@ public class ScanService {
     private static final String STATUS_SENT = "sent";
     private static final String STATUS_SCHEDULED = "scheduled";
 
+    private static final Set<String> SOURCES = Set.of("camera", "gallery");
+
     private final ScanRepository scanRepository;
     private final ImageRepository imageRepository;
     private final NotificationRepository notificationRepository;
+    private final UserRepository userRepository;
     private final ImageUrlSigner imageUrlSigner;
+    private final ImageStorage imageStorage;
+    private final RipenessPredictor ripenessPredictor;
 
     public ScanService(
             ScanRepository scanRepository,
             ImageRepository imageRepository,
             NotificationRepository notificationRepository,
-            ImageUrlSigner imageUrlSigner) {
+            UserRepository userRepository,
+            ImageUrlSigner imageUrlSigner,
+            ImageStorage imageStorage,
+            RipenessPredictor ripenessPredictor) {
         this.scanRepository = scanRepository;
         this.imageRepository = imageRepository;
         this.notificationRepository = notificationRepository;
+        this.userRepository = userRepository;
         this.imageUrlSigner = imageUrlSigner;
+        this.imageStorage = imageStorage;
+        this.ripenessPredictor = ripenessPredictor;
+    }
+
+    /**
+     * Runs a scan: classify the photo, persist the result, then store the original image.
+     *
+     * <p>The scan row is saved before the upload even though the spec lists the upload first: the
+     * documented object path {@code raw/{user_id}/{scan_id}.jpg} needs an id that only exists once
+     * the row is written.
+     */
+    @Transactional
+    public ScanResponse create(Long userId, byte[] imageBytes, String source, BigDecimal tempCelsius) {
+        if (!SOURCES.contains(source)) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "source must be camera or gallery");
+        }
+        User user = userRepository.findById(userId).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
+
+        PredictionResult prediction = ripenessPredictor.predict(imageBytes);
+
+        Scan scan = scanRepository.save(Scan.builder()
+                .user(user)
+                // Snapshot the target now so later settings changes cannot rewrite this scan's D-day.
+                .targetStage(user.getPreferredStage())
+                .tempCelsius(tempCelsius)
+                .predictedStage(prediction.predictedStage())
+                .confidence(prediction.confidence())
+                .stageProbs(prediction.stageProbs())
+                .daysToTarget(prediction.daysToTarget())
+                .estimatedPeakDate(prediction.estimatedPeakDate())
+                .modelVersion(prediction.modelVersion())
+                .build());
+
+        Image image = storeOriginal(user.getId(), scan, imageBytes, source);
+        String croppedUrl = image == null ? null : imageUrlSigner.sign(image.getCroppedUrl());
+        return ScanResponse.of(scan, image, croppedUrl);
+    }
+
+    /** Returns null when GCS is off — {@code images.image_url} is NOT NULL, so we skip the row. */
+    private Image storeOriginal(Long userId, Scan scan, byte[] imageBytes, String source) {
+        String objectName = "raw/" + userId + "/" + scan.getId() + ".jpg";
+        String imageUrl = imageStorage.upload(objectName, imageBytes, MediaType.IMAGE_JPEG_VALUE);
+        if (imageUrl == null) {
+            return null;
+        }
+        return imageRepository.save(Image.builder()
+                .scan(scan)
+                .imageUrl(imageUrl)
+                .source(source)
+                .build());
     }
 
     @Transactional(readOnly = true)

@@ -28,6 +28,12 @@ spring:
     time-zone: UTC
     property-naming-strategy: SNAKE_CASE
 
+  # Scan uploads are single phone photos; anything larger is rejected with FILE_TOO_LARGE.
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+
 # JWT settings — secret injected from env, never hard-coded.
 # Single access token (no refresh); longer TTL for usability on mobile.
 jwt:
@@ -40,6 +46,15 @@ jwt:
 gcs:
   bucket: ${GCS_BUCKET:}
   signed-url-ttl-minutes: ${GCS_SIGNED_URL_TTL_MINUTES:15}
+
+# AI inference service. A blank base-url leaves scanning disabled (502) rather than
+# preventing startup, so the rest of the API stays usable before the service is deployed.
+# Timeouts are generous: the service scales to zero, so the first call pays a cold start.
+ai:
+  base-url: ${AI_BASE_URL:}
+  predict-path: ${AI_PREDICT_PATH:/predict}
+  connect-timeout-seconds: ${AI_CONNECT_TIMEOUT_SECONDS:10}
+  read-timeout-seconds: ${AI_READ_TIMEOUT_SECONDS:60}
 
 # Swagger UI at /swagger-ui.html, spec at /v3/api-docs
 springdoc:
