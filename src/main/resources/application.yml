@@ -34,6 +34,13 @@ jwt:
   secret: ${JWT_SECRET}
   access-token-validity-seconds: ${JWT_ACCESS_TTL:1209600}   # 14 days
 
+# Google Cloud Storage. Credentials come from GOOGLE_APPLICATION_CREDENTIALS (ADC) —
+# never configured inline. Leaving the bucket blank disables GCS: image URLs come back
+# null instead of failing, which is what tests and un-provisioned environments rely on.
+gcs:
+  bucket: ${GCS_BUCKET:}
+  signed-url-ttl-minutes: ${GCS_SIGNED_URL_TTL_MINUTES:15}
+
 # Swagger UI at /swagger-ui.html, spec at /v3/api-docs
 springdoc:
   swagger-ui:

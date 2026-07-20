@@ -29,6 +29,10 @@ ext {
 }
 
 dependencies {
+    // --- Google Cloud (BOM keeps the client versions aligned) ---
+    implementation platform('com.google.cloud:libraries-bom:26.83.0')
+    implementation 'com.google.cloud:google-cloud-storage'                     // image bucket + TTL-signed URLs
+
     // --- Web / REST ---
     implementation 'org.springframework.boot:spring-boot-starter-web'          // REST controllers, embedded Tomcat, JSON
 
