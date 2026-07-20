@@ -1,6 +1,6 @@
-package com.davocado.server.domain.prediction.entity;
+package com.davocado.server.domain.scan.entity;
 
-import com.davocado.server.domain.avocado.entity.Avocado;
+import com.davocado.server.domain.user.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
@@ -26,28 +26,41 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
- * A single ripeness prediction for an avocado, as returned by the AI service.
+ * A single ripeness scan: one photo, one AI prediction, one row.
  *
- * <p>See {@code D-avocado_DB_명세서_v0.2.md} section 2.3. {@code predictedStage},
- * {@code stageProbs}, {@code daysToTarget}, {@code estimatedPeakDate} and {@code modelVersion}
- * are stored exactly as returned by the AI service — Spring does not compute or override them.
+ * <p>See {@code D-avocado_DB_명세서_v1.md} section 2.2. This is the app's sole core artifact —
+ * avocados are not tracked as standalone entities, only as a stream of scans. {@code targetStage}
+ * is a snapshot of {@code users.preferredStage} at scan time, so past scans keep a stable D-day
+ * interpretation even if the user later changes their preferred stage. {@code predictedStage},
+ * {@code confidence}, {@code stageProbs}, {@code daysToTarget}, {@code estimatedPeakDate} and
+ * {@code modelVersion} are stored exactly as returned by the AI service — Spring does not compute
+ * or override them.
+ *
+ * <p><b>Append-only:</b> a scan is never updated after creation ("re-scan" inserts a new row, it
+ * does not modify an existing one). There is no {@code updatedAt} column and no setters.
  */
 @Entity
-@Table(
-        name = "predictions",
-        indexes = @Index(name = "idx_predictions_avocado_predicted_at", columnList = "avocado_id, predicted_at DESC"))
+@Table(name = "scans", indexes = @Index(name = "idx_scans_user_created", columnList = "user_id, created_at DESC"))
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class)
-public class Prediction {
+public class Scan {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "avocado_id", nullable = false)
-    private Avocado avocado;
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    /** Snapshot of {@code users.preferredStage} at scan time; valid range 1~5. */
+    @Column(name = "target_stage", nullable = false, columnDefinition = "smallint")
+    private Integer targetStage;
+
+    /** User-supplied room temperature in Celsius; stored raw, never clamped or interpreted. */
+    @Column(name = "temp_celsius", precision = 4, scale = 1)
+    private BigDecimal tempCelsius;
 
     /** Predicted ripeness stage from the model; valid range 1~5. */
     @Column(name = "predicted_stage", nullable = false, columnDefinition = "smallint")
@@ -61,8 +74,9 @@ public class Prediction {
     @Column(name = "stage_probs", columnDefinition = "jsonb")
     private List<Double> stageProbs;
 
-    @Column(name = "days_to_target", columnDefinition = "smallint")
-    private Integer daysToTarget;
+    /** Days remaining until {@code targetStage}; decimal and negative allowed (negative = overripe). */
+    @Column(name = "days_to_target", precision = 4, scale = 1)
+    private BigDecimal daysToTarget;
 
     @Column(name = "estimated_peak_date")
     private LocalDate estimatedPeakDate;
@@ -71,19 +85,23 @@ public class Prediction {
     private String modelVersion;
 
     @CreatedDate
-    @Column(name = "predicted_at", nullable = false, updatable = false)
-    private Instant predictedAt;
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
 
     @Builder
-    public Prediction(
-            Avocado avocado,
+    public Scan(
+            User user,
+            Integer targetStage,
+            BigDecimal tempCelsius,
             Integer predictedStage,
             BigDecimal confidence,
             List<Double> stageProbs,
-            Integer daysToTarget,
+            BigDecimal daysToTarget,
             LocalDate estimatedPeakDate,
             String modelVersion) {
-        this.avocado = avocado;
+        this.user = user;
+        this.targetStage = targetStage;
+        this.tempCelsius = tempCelsius;
         this.predictedStage = predictedStage;
         this.confidence = confidence;
         this.stageProbs = stageProbs;

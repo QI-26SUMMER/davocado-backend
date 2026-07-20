@@ -1,6 +1,6 @@
 package com.davocado.server.domain.notification.entity;
 
-import com.davocado.server.domain.avocado.entity.Avocado;
+import com.davocado.server.domain.scan.entity.Scan;
 import com.davocado.server.domain.user.entity.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -25,10 +25,12 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
- * A scheduled (and eventually sent) push notification for an avocado's ripeness.
+ * A scheduled (and eventually sent) push notification for a scan approaching its target ripeness.
  *
- * <p>See {@code D-avocado_DB_명세서_v0.2.md} section 2.5. Re-predicting an avocado cancels its
- * existing {@code scheduled} notifications and re-creates them, since D-day may have changed.
+ * <p>See {@code D-avocado_DB_명세서_v1.md} section 2.4. At most one notification per scan.
+ * {@code scheduledAt} is {@code estimatedPeakDate} minus the user's {@code advanceNoticeDays};
+ * delivery is a real FCM/APNs push sent to {@code users.pushToken}. Deleting the parent scan
+ * cascades and removes its notifications, {@code sent} rows included.
  */
 @Entity
 @Table(name = "notifications", indexes = @Index(name = "idx_notifications_status_scheduled_at", columnList = "status, scheduled_at"))
@@ -46,12 +48,8 @@ public class Notification {
     private User user;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "avocado_id", nullable = false)
-    private Avocado avocado;
-
-    /** {@code peak_soon} / {@code peak_today} / {@code overripe_warning}. */
-    @Column(nullable = false, length = 20)
-    private String type;
+    @JoinColumn(name = "scan_id", nullable = false)
+    private Scan scan;
 
     @Column(name = "scheduled_at", nullable = false)
     private Instant scheduledAt;
@@ -59,7 +57,7 @@ public class Notification {
     @Column(name = "sent_at")
     private Instant sentAt;
 
-    /** {@code scheduled} / {@code sent} / {@code cancelled}. */
+    /** {@code scheduled} / {@code sent}. */
     @Column(nullable = false, length = 15)
     private String status;
 
@@ -73,10 +71,9 @@ public class Notification {
     private Instant createdAt;
 
     @Builder
-    public Notification(User user, Avocado avocado, String type, Instant scheduledAt, Map<String, Object> payload) {
+    public Notification(User user, Scan scan, Instant scheduledAt, Map<String, Object> payload) {
         this.user = user;
-        this.avocado = avocado;
-        this.type = type;
+        this.scan = scan;
         this.scheduledAt = scheduledAt;
         this.payload = payload;
         this.status = "scheduled";
