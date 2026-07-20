@@ -20,6 +20,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 import org.hibernate.type.SqlTypes;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -49,6 +51,7 @@ public class Notification {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "scan_id", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private Scan scan;
 
     @Column(name = "scheduled_at", nullable = false)
@@ -77,5 +80,11 @@ public class Notification {
         this.scheduledAt = scheduledAt;
         this.payload = payload;
         this.status = "scheduled";
+    }
+
+    /** Records delivery. The scheduler calls this once the push has been handed off. */
+    public void markSent(Instant sentAt) {
+        this.status = "sent";
+        this.sentAt = sentAt;
     }
 }
