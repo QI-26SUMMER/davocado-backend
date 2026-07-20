@@ -55,6 +55,10 @@ ai:
   predict-path: ${AI_PREDICT_PATH:/predict}
   connect-timeout-seconds: ${AI_CONNECT_TIMEOUT_SECONDS:10}
   read-timeout-seconds: ${AI_READ_TIMEOUT_SECONDS:60}
+  # The Cloud Run service is private, so requests carry a Google-signed ID token (from ADC).
+  # Set false only when pointing at a public/mock endpoint. Audience defaults to base-url.
+  use-id-token: ${AI_USE_ID_TOKEN:true}
+  audience: ${AI_AUDIENCE:}
 
 # Swagger UI at /swagger-ui.html, spec at /v3/api-docs
 springdoc:

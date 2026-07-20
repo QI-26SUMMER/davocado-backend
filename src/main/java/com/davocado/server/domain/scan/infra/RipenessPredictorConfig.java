@@ -1,5 +1,6 @@
 package com.davocado.server.domain.scan.infra;
 
+import java.io.IOException;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
@@ -24,15 +25,28 @@ public class RipenessPredictorConfig {
             @Value("${ai.base-url}") String baseUrl,
             @Value("${ai.predict-path:/predict}") String predictPath,
             @Value("${ai.connect-timeout-seconds:10}") long connectTimeoutSeconds,
-            @Value("${ai.read-timeout-seconds:60}") long readTimeoutSeconds) {
+            @Value("${ai.read-timeout-seconds:60}") long readTimeoutSeconds,
+            @Value("${ai.use-id-token:true}") boolean useIdToken,
+            @Value("${ai.audience:}") String audience) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofSeconds(connectTimeoutSeconds));
         requestFactory.setReadTimeout(Duration.ofSeconds(readTimeoutSeconds));
-        RestClient restClient = RestClient.builder()
+
+        RestClient.Builder builder = RestClient.builder()
                 .baseUrl(baseUrl)
-                .requestFactory(requestFactory)
-                .build();
-        return new HttpRipenessPredictor(restClient, predictPath);
+                .requestFactory(requestFactory);
+        if (useIdToken) {
+            // The AI service is a private Cloud Run service; it only accepts callers presenting a
+            // Google-signed ID token whose audience is the service URL.
+            String tokenAudience = audience.isEmpty() ? baseUrl : audience;
+            try {
+                builder.requestInterceptor(new IdTokenAuthInterceptor(tokenAudience));
+            } catch (IOException e) {
+                throw new IllegalStateException(
+                        "ai.use-id-token is enabled but ID-token credentials could not be initialized", e);
+            }
+        }
+        return new HttpRipenessPredictor(builder.build(), predictPath);
     }
 
     @Bean
