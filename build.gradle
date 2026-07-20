@@ -32,6 +32,9 @@ dependencies {
     // --- Google Cloud (BOM keeps the client versions aligned) ---
     implementation platform('com.google.cloud:libraries-bom:26.83.0')
     implementation 'com.google.cloud:google-cloud-storage'                     // image bucket + TTL-signed URLs
+    // Cloud SQL socket factory: lets Cloud Run reach Cloud SQL with no authorized-networks/IP,
+    // via jdbc:postgresql:///db?cloudSqlInstance=...&socketFactory=... (see application-cloud.yml).
+    runtimeOnly 'com.google.cloud.sql:postgres-socket-factory:1.20.1'
 
     // --- Web / REST ---
     implementation 'org.springframework.boot:spring-boot-starter-web'          // REST controllers, embedded Tomcat, JSON

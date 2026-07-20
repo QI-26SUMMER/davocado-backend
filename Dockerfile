@@ -1,23 +1,18 @@
 # ---- Build stage: compile the Spring Boot fat jar with the Gradle wrapper ----
+# The Gradle build runs inside the container (Linux, ASCII paths), sidestepping the host's
+# Korean-path issue entirely.
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /app
-
-# Copy wrapper + build definition first so dependency resolution is cached
-# separately from source changes.
-COPY gradlew ./
+COPY gradlew settings.gradle build.gradle ./
 COPY gradle ./gradle
-COPY build.gradle settings.gradle ./
-RUN chmod +x gradlew && ./gradlew --no-daemon dependencies || true
-
-# Copy sources and build the runnable boot jar (skip tests — they need a DB).
 COPY src ./src
-RUN ./gradlew --no-daemon clean bootJar -x test
+# Tests need H2 and are already verified on the host; skip them for a faster image build.
+RUN chmod +x gradlew && ./gradlew --no-daemon clean bootJar -x test
 
 # ---- Runtime stage: slim JRE image running the jar ----
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-COPY --from=build /app/build/libs/*.jar app.jar
-
-# Render injects $PORT at runtime; bind Spring to it. Everything runs in UTC.
+COPY --from=build /app/build/libs/*-SNAPSHOT.jar app.jar
+# Cloud Run (and Render) inject $PORT at runtime; bind Spring to it. Everything runs in UTC.
 ENV JAVA_OPTS=""
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Duser.timezone=UTC -Dserver.port=${PORT:-8080} -jar app.jar"]

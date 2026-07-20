@@ -1,0 +1,11 @@
+# Cloud Run profile.
+#
+# ddl-auto=none: the schema is created once out-of-band (the initial local `update` run) and the
+# app does not manage DDL in the cloud. `validate` is unusable here — Hibernate 6.6 false-positives
+# on the SMALLINT columns, which are declared as Integer with columnDefinition="smallint": it
+# creates int2 but validates against int4 and reports a type mismatch. `none` sidesteps that while
+# avoiding the risk of `update` altering a deployed database.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: none
