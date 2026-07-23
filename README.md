@@ -135,7 +135,7 @@ return ApiResponse.success(data);   // -> { "data": ... }
 {
   "error": {
     "code": "ERROR_CODE",
-    "message": "사람이 읽을 설명"
+    "message": "Human-readable description"
   }
 }
 ```
