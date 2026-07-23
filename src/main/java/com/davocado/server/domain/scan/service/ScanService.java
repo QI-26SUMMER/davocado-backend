@@ -109,8 +109,14 @@ public class ScanService {
                 .build());
 
         Image image = storeImages(user.getId(), scan, imageBytes, prediction.croppedB64(), source);
+        return toResponse(scan, image);
+    }
+
+    /** Signs the original and cropped images (both null when GCS is off) into a detail response. */
+    private ScanResponse toResponse(Scan scan, Image image) {
+        String originalUrl = image == null ? null : imageUrlSigner.sign(image.getImageUrl());
         String croppedUrl = image == null ? null : imageUrlSigner.sign(image.getCroppedUrl());
-        return ScanResponse.of(scan, image, croppedUrl);
+        return ScanResponse.of(scan, image, originalUrl, croppedUrl);
     }
 
     /**
@@ -165,7 +171,8 @@ public class ScanService {
         List<ScanListItem> items = page.stream()
                 .map(scan -> {
                     Image image = images.get(scan.getId());
-                    String thumbnail = image == null ? null : imageUrlSigner.sign(image.getCroppedUrl());
+                    // History shows the user's original photo, not the crop.
+                    String thumbnail = image == null ? null : imageUrlSigner.sign(image.getImageUrl());
                     return ScanListItem.of(scan, notifications.get(scan.getId()), thumbnail);
                 })
                 .toList();
@@ -183,9 +190,7 @@ public class ScanService {
     @Transactional(readOnly = true)
     public ScanResponse get(Long userId, Long id) {
         Scan scan = loadOwned(userId, id);
-        Image image = imageRepository.findByScanId(id).orElse(null);
-        String croppedUrl = image == null ? null : imageUrlSigner.sign(image.getCroppedUrl());
-        return ScanResponse.of(scan, image, croppedUrl);
+        return toResponse(scan, imageRepository.findByScanId(id).orElse(null));
     }
 
     @Transactional

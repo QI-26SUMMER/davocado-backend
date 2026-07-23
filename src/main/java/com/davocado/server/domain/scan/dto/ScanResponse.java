@@ -23,10 +23,10 @@ public record ScanResponse(
         ScanDisplay display) {
 
     /**
-     * {@code signedCroppedUrl} is already signed by the caller. The {@code image} block is present
-     * only when the scan actually has an image row.
+     * The signed URLs are already produced by the caller. The {@code image} block is present only
+     * when the scan actually has an image row.
      */
-    public static ScanResponse of(Scan scan, Image image, String signedCroppedUrl) {
+    public static ScanResponse of(Scan scan, Image image, String signedOriginalUrl, String signedCroppedUrl) {
         return new ScanResponse(
                 scan.getId(),
                 scan.getPredictedStage(),
@@ -37,7 +37,7 @@ public record ScanResponse(
                 scan.getDaysToTarget(),
                 scan.getEstimatedPeakDate(),
                 scan.getModelVersion(),
-                image == null ? null : new ScanImageSummary(signedCroppedUrl),
+                image == null ? null : new ScanImageSummary(signedOriginalUrl, signedCroppedUrl),
                 scan.getCreatedAt(),
                 ScanDisplay.from(scan.getDaysToTarget()));
     }

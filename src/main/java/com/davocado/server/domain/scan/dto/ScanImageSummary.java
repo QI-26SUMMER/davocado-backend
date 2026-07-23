@@ -3,7 +3,8 @@ package com.davocado.server.domain.scan.dto;
 /**
  * The image block of a scan detail response.
  *
- * <p>{@code croppedUrl} is a TTL-signed GCS URL rather than the stored {@code gs://} path — the
- * bucket is private. It is null when the crop does not exist yet or GCS is not configured.
+ * <p>Both are TTL-signed GCS URLs (the bucket is private), or null when the image row / crop is
+ * absent or GCS is off. {@code originalUrl} is the user's uploaded photo (shown in the UI);
+ * {@code croppedUrl} is the background-removed crop the model analyzed.
  */
-public record ScanImageSummary(String croppedUrl) {}
+public record ScanImageSummary(String originalUrl, String croppedUrl) {}
