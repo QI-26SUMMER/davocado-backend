@@ -1,20 +1,18 @@
 package com.davocado.server.domain.scan.infra;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
 
 /**
  * What the AI service returned for one image. Stored verbatim — Spring never computes any of it.
  *
- * <p>{@code daysToTarget} and {@code estimatedPeakDate} are nullable: the service does not return
- * them yet (the days-until-target formula is still being decided on the ML side), and the columns
- * are nullable to match.
+ * <p>{@code daysToTarget} is nullable: the {@code days_to_target} column is nullable to match.
+ * {@code estimatedPeakDate} is not part of this result — the AI service does not return it, so
+ * Spring derives it from {@code daysToTarget} with plain date arithmetic (see {@code ScanService}).
  */
 public record PredictionResult(
         Integer predictedStage,
         BigDecimal confidence,
         List<Double> stageProbs,
         String modelVersion,
-        BigDecimal daysToTarget,
-        LocalDate estimatedPeakDate) {}
+        BigDecimal daysToTarget) {}

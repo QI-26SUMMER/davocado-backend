@@ -2,6 +2,7 @@ package com.davocado.server.domain.scan.infra;
 
 import com.davocado.server.global.exception.BusinessException;
 import com.davocado.server.global.exception.ErrorCode;
+import java.math.BigDecimal;
 
 /**
  * Stands in when no AI service is configured.
@@ -12,7 +13,7 @@ import com.davocado.server.global.exception.ErrorCode;
 public class UnavailableRipenessPredictor implements RipenessPredictor {
 
     @Override
-    public PredictionResult predict(byte[] imageBytes) {
+    public PredictionResult predict(byte[] imageBytes, int targetStage, BigDecimal tempCelsius) {
         throw new BusinessException(ErrorCode.INFERENCE_SERVICE_UNAVAILABLE);
     }
 }
