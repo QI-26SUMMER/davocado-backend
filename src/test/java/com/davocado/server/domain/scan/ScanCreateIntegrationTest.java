@@ -13,6 +13,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.davocado.server.domain.notification.entity.Notification;
+import com.davocado.server.domain.notification.repository.NotificationRepository;
 import com.davocado.server.domain.scan.entity.Image;
 import com.davocado.server.domain.scan.infra.PredictionResult;
 import com.davocado.server.domain.scan.infra.RipenessPredictor;
@@ -89,6 +91,9 @@ class ScanCreateIntegrationTest extends IntegrationTest {
 
     @Autowired
     private ImageRepository imageRepository;
+
+    @Autowired
+    private NotificationRepository notificationRepository;
 
     // GCS is unconfigured in tests, so the real ImageStorage returns null (no image row). Mocking it
     // lets the crop test make uploads "succeed" and assert the crop was stored; it returns null by
@@ -167,6 +172,33 @@ class ScanCreateIntegrationTest extends IntegrationTest {
                 .andExpect(jsonPath("$.data.display.status").value("ripening"))
                 // Spring derives this from days_to_target now — the AI no longer returns it.
                 .andExpect(jsonPath("$.data.estimated_peak_date").exists());
+    }
+
+    @Test
+    @DisplayName("schedules a notification when a future peak is derived and push is enabled")
+    void schedulesNotificationOnCreate() throws Exception {
+        String token = signupAndLogin("scan_create13@example.com", "password123");
+        stubPredictor.next = new PredictionResult(
+                2,
+                new BigDecimal("0.8700"),
+                List.of(0.05, 0.87, 0.06, 0.01, 0.01),
+                "resnet18_v3",
+                new BigDecimal("3.0"),
+                null);
+
+        MvcResult result = mockMvc.perform(multipart("/scans")
+                        .file(jpeg())
+                        .file(part("source", "camera"))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated())
+                .andReturn();
+        long scanId = objectMapper.readTree(result.getResponse().getContentAsString())
+                .path("data").path("id").asLong();
+
+        // Default push_enabled=true, so step 6 auto-schedules a notification (API spec v1.0 section 3.1).
+        List<Notification> notifications = notificationRepository.findByScanId(scanId);
+        assertThat(notifications).hasSize(1);
+        assertThat(notifications.get(0).getStatus()).isEqualTo("scheduled");
     }
 
     @Test

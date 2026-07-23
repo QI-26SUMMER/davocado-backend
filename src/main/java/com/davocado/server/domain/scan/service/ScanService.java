@@ -2,8 +2,11 @@ package com.davocado.server.domain.scan.service;
 
 import com.davocado.server.domain.notification.entity.Notification;
 import com.davocado.server.domain.notification.repository.NotificationRepository;
+import com.davocado.server.domain.notification.service.NotificationService;
+import com.davocado.server.domain.scan.dto.NotificationSummary;
 import com.davocado.server.domain.scan.dto.ScanListItem;
 import com.davocado.server.domain.scan.dto.ScanListResponse;
+import com.davocado.server.domain.scan.dto.ScanNotificationResponse;
 import com.davocado.server.domain.scan.dto.ScanResponse;
 import com.davocado.server.domain.scan.dto.ScanStatsResponse;
 import com.davocado.server.domain.scan.entity.Image;
@@ -51,6 +54,7 @@ public class ScanService {
     private final ScanRepository scanRepository;
     private final ImageRepository imageRepository;
     private final NotificationRepository notificationRepository;
+    private final NotificationService notificationService;
     private final UserRepository userRepository;
     private final ImageUrlSigner imageUrlSigner;
     private final ImageStorage imageStorage;
@@ -60,6 +64,7 @@ public class ScanService {
             ScanRepository scanRepository,
             ImageRepository imageRepository,
             NotificationRepository notificationRepository,
+            NotificationService notificationService,
             UserRepository userRepository,
             ImageUrlSigner imageUrlSigner,
             ImageStorage imageStorage,
@@ -67,6 +72,7 @@ public class ScanService {
         this.scanRepository = scanRepository;
         this.imageRepository = imageRepository;
         this.notificationRepository = notificationRepository;
+        this.notificationService = notificationService;
         this.userRepository = userRepository;
         this.imageUrlSigner = imageUrlSigner;
         this.imageStorage = imageStorage;
@@ -109,6 +115,13 @@ public class ScanService {
                 .build());
 
         Image image = storeImages(user.getId(), scan, imageBytes, prediction.croppedB64(), source);
+
+        // Step 6: auto-schedule a notification when the user has opted into push (API spec v1.0
+        // section 3.1). scheduleForScan itself no-ops when there is no future peak to notify for.
+        if (user.isPushEnabled()) {
+            notificationService.scheduleForScan(user, scan);
+        }
+
         return toResponse(scan, image);
     }
 
@@ -197,6 +210,16 @@ public class ScanService {
     public void delete(Long userId, Long id) {
         // The image and notification rows go with it via ON DELETE CASCADE (DB spec v1.0 section 5).
         scanRepository.delete(loadOwned(userId, id));
+    }
+
+    /** Toggles the History row's bell icon. See API spec v1.0 section 3.6. */
+    @Transactional
+    public ScanNotificationResponse toggleNotification(Long userId, Long id, boolean enabled) {
+        Scan scan = loadOwned(userId, id);
+        NotificationSummary summary = enabled
+                ? notificationService.scheduleForScan(scan.getUser(), scan)
+                : notificationService.cancelScheduled(scan.getId());
+        return ScanNotificationResponse.of(scan.getId(), summary);
     }
 
     /** Loads the scan in one query and rejects it if it belongs to someone else. */
