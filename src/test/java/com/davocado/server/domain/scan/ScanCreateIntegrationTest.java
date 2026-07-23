@@ -292,11 +292,13 @@ class ScanCreateIntegrationTest extends IntegrationTest {
                         .file(part("source", "camera"))
                         .file(part("temp_celsius", "21.5"))
                         .header("Authorization", "Bearer " + token))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.temp_celsius").value(21.5));
 
         mockMvc.perform(get("/scans").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items.length()").value(1));
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].temp_celsius").value(21.5));
     }
 
     @Test
