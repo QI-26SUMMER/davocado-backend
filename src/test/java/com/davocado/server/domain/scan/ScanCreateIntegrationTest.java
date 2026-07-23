@@ -1,19 +1,29 @@
 package com.davocado.server.domain.scan;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.davocado.server.domain.scan.entity.Image;
 import com.davocado.server.domain.scan.infra.PredictionResult;
 import com.davocado.server.domain.scan.infra.RipenessPredictor;
+import com.davocado.server.domain.scan.repository.ImageRepository;
 import com.davocado.server.global.exception.BusinessException;
 import com.davocado.server.global.exception.ErrorCode;
+import com.davocado.server.global.storage.ImageStorage;
 import com.davocado.server.support.IntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +35,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MvcResult;
 
 /**
@@ -49,6 +60,7 @@ class ScanCreateIntegrationTest extends IntegrationTest {
                     new BigDecimal("0.8700"),
                     List.of(0.05, 0.87, 0.06, 0.01, 0.01),
                     "P1_general_resnet18_paper_aug_oversample",
+                    null,
                     null);
         }
 
@@ -74,6 +86,15 @@ class ScanCreateIntegrationTest extends IntegrationTest {
 
     @Autowired
     private StubPredictor stubPredictor;
+
+    @Autowired
+    private ImageRepository imageRepository;
+
+    // GCS is unconfigured in tests, so the real ImageStorage returns null (no image row). Mocking it
+    // lets the crop test make uploads "succeed" and assert the crop was stored; it returns null by
+    // default, matching the GCS-off behaviour the other tests rely on.
+    @MockitoBean
+    private ImageStorage imageStorage;
 
     @BeforeEach
     void resetStub() {
@@ -134,7 +155,8 @@ class ScanCreateIntegrationTest extends IntegrationTest {
                 new BigDecimal("0.8700"),
                 List.of(0.05, 0.87, 0.06, 0.01, 0.01),
                 "resnet18_v3",
-                new BigDecimal("3.4"));
+                new BigDecimal("3.4"),
+                null);
 
         mockMvc.perform(multipart("/scans")
                         .file(jpeg())
@@ -156,7 +178,8 @@ class ScanCreateIntegrationTest extends IntegrationTest {
                 new BigDecimal("0.8700"),
                 List.of(0.05, 0.87, 0.06, 0.01, 0.01),
                 "resnet18_v3",
-                new BigDecimal("4.5"));
+                new BigDecimal("4.5"),
+                null);
 
         mockMvc.perform(multipart("/scans")
                         .file(jpeg())
@@ -187,6 +210,42 @@ class ScanCreateIntegrationTest extends IntegrationTest {
 
         assertThat(stubPredictor.lastTargetStage).isEqualTo(4);
         assertThat(stubPredictor.lastTempCelsius).isEqualByComparingTo(new BigDecimal("17.0"));
+    }
+
+    @Test
+    @DisplayName("a returned cropped image is decoded and stored under cropped/, setting cropped_url")
+    void storesCroppedImage() throws Exception {
+        String token = signupAndLogin("scan_create12@example.com", "password123");
+        byte[] cropBytes = "cropped-jpeg-bytes".getBytes();
+        stubPredictor.next = new PredictionResult(
+                2,
+                new BigDecimal("0.8700"),
+                List.of(0.05, 0.87, 0.06, 0.01, 0.01),
+                "resnet18_v3",
+                new BigDecimal("3.0"),
+                Base64.getEncoder().encodeToString(cropBytes));
+        // Echo each object path back as a gs:// URI so both the raw and the cropped upload "succeed".
+        given(imageStorage.upload(anyString(), any(), anyString()))
+                .willAnswer(inv -> "gs://bucket/" + inv.getArgument(0, String.class));
+
+        MvcResult result = mockMvc.perform(multipart("/scans")
+                        .file(jpeg())
+                        .file(part("source", "camera"))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated())
+                .andReturn();
+        long scanId = objectMapper.readTree(result.getResponse().getContentAsString())
+                .path("data").path("id").asLong();
+
+        // The crop was decoded and uploaded under cropped/{userId}/{scanId}.jpg.
+        verify(imageStorage).upload(
+                argThat(name -> name.startsWith("cropped/") && name.endsWith("/" + scanId + ".jpg")),
+                eq(cropBytes),
+                anyString());
+        // ...and the image row records the path (the response URL itself is a signed URL, which is
+        // null here because the signer needs GCS too).
+        Image image = imageRepository.findByScanId(scanId).orElseThrow();
+        assertThat(image.getCroppedUrl()).contains("cropped/");
     }
 
     @Test

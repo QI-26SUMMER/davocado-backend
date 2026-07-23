@@ -21,11 +21,14 @@ import com.davocado.server.global.storage.ImageUrlSigner;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -34,6 +37,8 @@ import org.springframework.transaction.annotation.Transactional;
 /** Read and delete operations over the caller's scans. Scan creation lives with the AI integration. */
 @Service
 public class ScanService {
+
+    private static final Logger log = LoggerFactory.getLogger(ScanService.class);
 
     private static final int DEFAULT_LIMIT = 20;
     private static final int MAX_LIMIT = 100;
@@ -103,23 +108,43 @@ public class ScanService {
                 .modelVersion(prediction.modelVersion())
                 .build());
 
-        Image image = storeOriginal(user.getId(), scan, imageBytes, source);
+        Image image = storeImages(user.getId(), scan, imageBytes, prediction.croppedB64(), source);
         String croppedUrl = image == null ? null : imageUrlSigner.sign(image.getCroppedUrl());
         return ScanResponse.of(scan, image, croppedUrl);
     }
 
-    /** Returns null when GCS is off — {@code images.image_url} is NOT NULL, so we skip the row. */
-    private Image storeOriginal(Long userId, Scan scan, byte[] imageBytes, String source) {
-        String objectName = "raw/" + userId + "/" + scan.getId() + ".jpg";
-        String imageUrl = imageStorage.upload(objectName, imageBytes, MediaType.IMAGE_JPEG_VALUE);
+    /**
+     * Uploads the original (and the crop, when the AI returned one) and records the row.
+     *
+     * <p>Returns null when GCS is off — {@code images.image_url} is NOT NULL, so we skip the row.
+     */
+    private Image storeImages(Long userId, Scan scan, byte[] imageBytes, String croppedB64, String source) {
+        String imageUrl = imageStorage.upload(
+                "raw/" + userId + "/" + scan.getId() + ".jpg", imageBytes, MediaType.IMAGE_JPEG_VALUE);
         if (imageUrl == null) {
             return null;
         }
         return imageRepository.save(Image.builder()
                 .scan(scan)
                 .imageUrl(imageUrl)
+                .croppedUrl(uploadCrop(userId, scan.getId(), croppedB64))
                 .source(source)
                 .build());
+    }
+
+    /** Decodes and stores the AI's crop. A bad crop must not fail a scan that already classified. */
+    private String uploadCrop(Long userId, Long scanId, String croppedB64) {
+        if (croppedB64 == null || croppedB64.isBlank()) {
+            return null;
+        }
+        try {
+            byte[] bytes = Base64.getDecoder().decode(croppedB64);
+            return imageStorage.upload(
+                    "cropped/" + userId + "/" + scanId + ".jpg", bytes, MediaType.IMAGE_JPEG_VALUE);
+        } catch (RuntimeException ex) {
+            log.warn("Failed to store cropped image for scan {}", scanId, ex);
+            return null;
+        }
     }
 
     @Transactional(readOnly = true)

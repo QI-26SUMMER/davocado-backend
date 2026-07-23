@@ -17,7 +17,8 @@ import org.springframework.web.client.RestClient;
  *
  * <p>Speaks the Vertex custom-container envelope the serving app implements:
  * request {@code {"instances":[{"b64": "..."}], "parameters":{"target_stage":..,"temp_celsius":..}}},
- * response {@code {"predictions":[{...}]}}.
+ * response {@code {"predictions":[{..., "cropped_b64": "..."}]}} ({@code cropped_b64} present only
+ * when the AI service has cropping enabled).
  *
  * <p>Every failure mode collapses into {@code INFERENCE_SERVICE_UNAVAILABLE} (502) — the client
  * cannot act on the difference between a timeout, a 500, and a malformed body.
@@ -88,7 +89,12 @@ public class HttpRipenessPredictor implements RipenessPredictor {
                 asDecimal(prediction.get("confidence")),
                 asProbs(prediction.get("stage_probs")),
                 modelVersion,
-                asDecimal(prediction.get("days_to_target")));
+                asDecimal(prediction.get("days_to_target")),
+                asString(prediction.get("cropped_b64")));
+    }
+
+    private String asString(Object value) {
+        return value instanceof String text ? text : null;
     }
 
     private Integer asInt(Object value) {
