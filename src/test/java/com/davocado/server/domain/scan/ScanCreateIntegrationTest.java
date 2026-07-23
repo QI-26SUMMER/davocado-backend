@@ -1,5 +1,6 @@
 package com.davocado.server.domain.scan;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -13,7 +14,6 @@ import com.davocado.server.global.exception.ErrorCode;
 import com.davocado.server.support.IntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,6 +40,8 @@ class ScanCreateIntegrationTest extends IntegrationTest {
     static class StubPredictor implements RipenessPredictor {
         PredictionResult next = defaultResult();
         RuntimeException failure;
+        Integer lastTargetStage;
+        BigDecimal lastTempCelsius;
 
         static PredictionResult defaultResult() {
             return new PredictionResult(
@@ -47,12 +49,13 @@ class ScanCreateIntegrationTest extends IntegrationTest {
                     new BigDecimal("0.8700"),
                     List.of(0.05, 0.87, 0.06, 0.01, 0.01),
                     "P1_general_resnet18_paper_aug_oversample",
-                    null,
                     null);
         }
 
         @Override
-        public PredictionResult predict(byte[] imageBytes) {
+        public PredictionResult predict(byte[] imageBytes, int targetStage, BigDecimal tempCelsius) {
+            lastTargetStage = targetStage;
+            lastTempCelsius = tempCelsius;
             if (failure != null) {
                 throw failure;
             }
@@ -76,6 +79,8 @@ class ScanCreateIntegrationTest extends IntegrationTest {
     void resetStub() {
         stubPredictor.next = StubPredictor.defaultResult();
         stubPredictor.failure = null;
+        stubPredictor.lastTargetStage = null;
+        stubPredictor.lastTempCelsius = null;
     }
 
     private MockMultipartFile jpeg() {
@@ -129,8 +134,7 @@ class ScanCreateIntegrationTest extends IntegrationTest {
                 new BigDecimal("0.8700"),
                 List.of(0.05, 0.87, 0.06, 0.01, 0.01),
                 "resnet18_v3",
-                new BigDecimal("3.4"),
-                LocalDate.of(2026, 7, 24));
+                new BigDecimal("3.4"));
 
         mockMvc.perform(multipart("/scans")
                         .file(jpeg())
@@ -139,7 +143,50 @@ class ScanCreateIntegrationTest extends IntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.display.dday_text").value("D-3"))
                 .andExpect(jsonPath("$.data.display.status").value("ripening"))
-                .andExpect(jsonPath("$.data.estimated_peak_date").value("2026-07-24"));
+                // Spring derives this from days_to_target now — the AI no longer returns it.
+                .andExpect(jsonPath("$.data.estimated_peak_date").exists());
+    }
+
+    @Test
+    @DisplayName("a float days_to_target is stored as-is and derives estimated_peak_date")
+    void floatDaysToTarget() throws Exception {
+        String token = signupAndLogin("scan_create10@example.com", "password123");
+        stubPredictor.next = new PredictionResult(
+                2,
+                new BigDecimal("0.8700"),
+                List.of(0.05, 0.87, 0.06, 0.01, 0.01),
+                "resnet18_v3",
+                new BigDecimal("4.5"));
+
+        mockMvc.perform(multipart("/scans")
+                        .file(jpeg())
+                        .file(part("source", "camera"))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.days_to_target").value(4.5))
+                .andExpect(jsonPath("$.data.estimated_peak_date").exists())
+                .andExpect(jsonPath("$.data.display.dday_text").exists());
+    }
+
+    @Test
+    @DisplayName("sends the user's preferred stage and the supplied temperature to the AI service")
+    void sendsTargetStageAndTemperature() throws Exception {
+        String token = signupAndLogin("scan_create11@example.com", "password123");
+        mockMvc.perform(patch("/users/me/settings")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType("application/json")
+                        .content(asJson(Map.of("preferred_stage", 4))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(multipart("/scans")
+                        .file(jpeg())
+                        .file(part("source", "camera"))
+                        .file(part("temp_celsius", "17.0"))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated());
+
+        assertThat(stubPredictor.lastTargetStage).isEqualTo(4);
+        assertThat(stubPredictor.lastTempCelsius).isEqualByComparingTo(new BigDecimal("17.0"));
     }
 
     @Test

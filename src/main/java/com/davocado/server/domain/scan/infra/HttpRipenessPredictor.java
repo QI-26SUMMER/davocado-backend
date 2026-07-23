@@ -3,8 +3,8 @@ package com.davocado.server.domain.scan.infra;
 import com.davocado.server.global.exception.BusinessException;
 import com.davocado.server.global.exception.ErrorCode;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -16,7 +16,8 @@ import org.springframework.web.client.RestClient;
  * Calls the AI service over HTTP.
  *
  * <p>Speaks the Vertex custom-container envelope the serving app implements:
- * request {@code {"instances":[{"b64": "..."}]}}, response {@code {"predictions":[{...}]}}.
+ * request {@code {"instances":[{"b64": "..."}], "parameters":{"target_stage":..,"temp_celsius":..}}},
+ * response {@code {"predictions":[{...}]}}.
  *
  * <p>Every failure mode collapses into {@code INFERENCE_SERVICE_UNAVAILABLE} (502) — the client
  * cannot act on the difference between a timeout, a 500, and a malformed body.
@@ -37,9 +38,17 @@ public class HttpRipenessPredictor implements RipenessPredictor {
     }
 
     @Override
-    public PredictionResult predict(byte[] imageBytes) {
+    public PredictionResult predict(byte[] imageBytes, int targetStage, BigDecimal tempCelsius) {
         String encoded = Base64.getEncoder().encodeToString(imageBytes);
-        Map<String, Object> body = Map.of("instances", List.of(Map.of("b64", encoded)));
+
+        // temp_celsius is omitted entirely when null — the AI defaults to 20C when the key is absent.
+        Map<String, Object> parameters = new LinkedHashMap<>();
+        parameters.put("target_stage", targetStage);
+        if (tempCelsius != null) {
+            parameters.put("temp_celsius", tempCelsius);
+        }
+        Map<String, Object> body =
+                Map.of("instances", List.of(Map.of("b64", encoded)), "parameters", parameters);
 
         Map<String, Object> response;
         try {
@@ -79,9 +88,7 @@ public class HttpRipenessPredictor implements RipenessPredictor {
                 asDecimal(prediction.get("confidence")),
                 asProbs(prediction.get("stage_probs")),
                 modelVersion,
-                // Not returned yet — the days-until-target formula is still open on the ML side.
-                asDecimal(prediction.get("days_to_target")),
-                asDate(prediction.get("estimated_peak_date")));
+                asDecimal(prediction.get("days_to_target")));
     }
 
     private Integer asInt(Object value) {
@@ -97,9 +104,5 @@ public class HttpRipenessPredictor implements RipenessPredictor {
             return null;
         }
         return list.stream().map(v -> v instanceof Number n ? n.doubleValue() : null).toList();
-    }
-
-    private LocalDate asDate(Object value) {
-        return value instanceof String text && !text.isBlank() ? LocalDate.parse(text) : null;
     }
 }

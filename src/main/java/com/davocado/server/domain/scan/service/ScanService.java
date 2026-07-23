@@ -19,6 +19,8 @@ import com.davocado.server.global.exception.ErrorCode;
 import com.davocado.server.global.storage.ImageStorage;
 import com.davocado.server.global.storage.ImageUrlSigner;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -80,7 +82,13 @@ public class ScanService {
         }
         User user = userRepository.findById(userId).orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND));
 
-        PredictionResult prediction = ripenessPredictor.predict(imageBytes);
+        PredictionResult prediction =
+                ripenessPredictor.predict(imageBytes, user.getPreferredStage(), tempCelsius);
+
+        // Plain date arithmetic on the AI's number, not ripeness/beta logic, so it stays in Spring.
+        LocalDate estimatedPeakDate = prediction.daysToTarget() == null
+                ? null
+                : LocalDate.now(ZoneOffset.UTC).plusDays(Math.round(prediction.daysToTarget().doubleValue()));
 
         Scan scan = scanRepository.save(Scan.builder()
                 .user(user)
@@ -91,7 +99,7 @@ public class ScanService {
                 .confidence(prediction.confidence())
                 .stageProbs(prediction.stageProbs())
                 .daysToTarget(prediction.daysToTarget())
-                .estimatedPeakDate(prediction.estimatedPeakDate())
+                .estimatedPeakDate(estimatedPeakDate)
                 .modelVersion(prediction.modelVersion())
                 .build());
 
