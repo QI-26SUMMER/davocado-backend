@@ -4,9 +4,10 @@ Backend for D-avocado, a mobile app that photographs an avocado, classifies its 
 stage (1–5), and tells you how many days remain until your desired ripeness (D-day).
 
 This Spring service owns **authentication, user settings, scan history, image storage and the
-database**. Image classification (ResNet-18) runs in a **separate AI service** on Cloud Run that
-Spring calls over HTTP. Spring persists exactly what the AI returns — it never computes the
-ripeness stage or the D-day itself.
+database**. Image classification runs in a **separate AI service** on Cloud Run that Spring calls
+over HTTP (the AI service currently classifies with a Vertex AI AutoML endpoint, with an in-house
+ResNet-18 as fallback). Spring persists what the AI returns — it never computes the ripeness stage
+or `days_to_target`; it only derives `estimated_peak_date` and the display label from that value.
 
 ## Architecture
 
@@ -43,7 +44,7 @@ environment — nothing sensitive is hard-coded, and `.env` is git-ignored.
 | `DB_PASSWORD` | yes | Database password |
 | `JWT_SECRET` | yes | Long random secret for signing JWTs (≥ 32 bytes) |
 | `JWT_ACCESS_TTL` | no | Access token TTL in seconds (default `1209600` = 14 days) |
-| `JPA_DDL_AUTO` | no | Hibernate DDL mode — `update` locally, `validate` in prod |
+| `JPA_DDL_AUTO` | no | Hibernate DDL mode — `update` locally. The `cloud` profile fixes it to `none` (schema created once out-of-band) |
 | `GOOGLE_APPLICATION_CREDENTIALS` | no | Path to a GCP service-account key (for GCS + the AI ID token). Uses Application Default Credentials |
 | `GCS_BUCKET` | no | Private bucket for images. Blank disables GCS — image URLs come back `null` |
 | `GCS_SIGNED_URL_TTL_MINUTES` | no | Lifetime of a signed image URL (default `15`) |
@@ -52,7 +53,8 @@ environment — nothing sensitive is hard-coded, and `.env` is git-ignored.
 | `AI_CONNECT_TIMEOUT_SECONDS` | no | AI connect timeout (default `10`) |
 | `AI_READ_TIMEOUT_SECONDS` | no | AI read timeout (default `60`, generous for Cloud Run cold starts) |
 | `AI_USE_ID_TOKEN` | no | Send a Google ID token to the (private) AI service (default `true`) |
-| `SPRING_PROFILES_ACTIVE` | no | Active profile (default `local`) |
+| `AI_AUDIENCE` | no | ID token audience (defaults to `AI_BASE_URL`) |
+| `SPRING_PROFILES_ACTIVE` | no | Active profile: `local` (default) or `cloud` (Cloud Run) |
 | `SERVER_PORT` | no | HTTP port (default `8080`) |
 
 The app boots without GCS or the AI service configured — those features are simply disabled
@@ -84,8 +86,8 @@ curl http://localhost:8080/health   # -> {"status":"ok"}
 - OpenAPI spec: <http://localhost:8080/v3/api-docs>
 
 > On Windows with a Korean-character user path, `./gradlew test` fails from the CLI due to a
-> Gradle worker-argfile encoding issue (not a code problem). Build under an ASCII path via
-> `subst` — see `CLAUDE.md` for the exact workaround.
+> Gradle worker-argfile encoding issue (not a code problem). Build under an ASCII path, for
+> example by mapping the project folder to a drive letter with `subst`.
 
 ## API overview
 
@@ -93,12 +95,13 @@ All endpoints are under the service root; browse the full contract in Swagger.
 
 | Area | Endpoints |
 | --- | --- |
-| Auth (`/auth`) | `signup`, `login`, `logout`, `password/reset` |
+| Auth (`/auth`) | `signup`, `login`, `logout`, `password/reset` (no-op stub, returns 202) |
 | Users & settings (`/users`) | `GET/PATCH /me`, `PATCH /me/settings`, `PUT /me/push-token` |
-| Scans (`/scans`) | `POST /scans` (multipart upload → classify → store), `GET /scans`, `GET /scans/stats`, `GET /scans/{id}`, `DELETE /scans/{id}` |
+| Scans (`/scans`) | `POST /scans` (multipart upload → classify → store), `GET /scans`, `GET /scans/stats`, `GET /scans/{id}`, `DELETE /scans/{id}`, `PATCH /scans/{id}/notification` (bell toggle) |
+| Notifications (`/notifications`) | `GET /notifications?status=scheduled\|sent` (cursor-paginated) |
 
-Email is the login identifier; every endpoint except signup/login/password-reset and the docs
-requires `Authorization: Bearer {token}`.
+Email is the login identifier; every endpoint except signup/login/password-reset, `/health`, and
+the docs requires `Authorization: Bearer {token}`.
 
 ## Package structure
 

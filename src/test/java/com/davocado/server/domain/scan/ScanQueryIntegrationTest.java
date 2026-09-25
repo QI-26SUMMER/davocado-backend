@@ -120,7 +120,7 @@ class ScanQueryIntegrationTest extends IntegrationTest {
                     .user(user)
                     .scan(withNotification)
                     .scheduledAt(Instant.parse("2026-07-22T09:00:00Z"))
-                    .payload(Map.of("title", "곧 적기예요"))
+                    .payload(Map.of("title", "Almost ready"))
                     .build());
 
             mockMvc.perform(get("/scans").header("Authorization", authHeader(token)))
