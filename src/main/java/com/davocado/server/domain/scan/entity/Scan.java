@@ -28,7 +28,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 /**
  * A single ripeness scan: one photo, one AI prediction, one row.
  *
- * <p>See {@code D-avocado_DB_명세서_v1.md} section 2.2. This is the app's sole core artifact —
+ * <p>See {@code docs/Database.md} (d-avocado repo) section 2.2. This is the app's sole core artifact —
  * avocados are not tracked as standalone entities, only as a stream of scans. {@code targetStage}
  * is a snapshot of {@code users.preferredStage} at scan time, so past scans keep a stable D-day
  * interpretation even if the user later changes their preferred stage. {@code predictedStage},

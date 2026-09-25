@@ -23,7 +23,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 /**
  * A captured image belonging to a scan, stored in GCS.
  *
- * <p>See {@code D-avocado_DB_명세서_v1.md} section 2.3. Only the GCS paths are stored here;
+ * <p>See {@code docs/Database.md} (d-avocado repo) section 2.3. Only the GCS paths are stored here;
  * {@code croppedUrl} is converted to a TTL-signed URL at the API layer before being returned.
  * Exactly one image per scan (single capture), enforced by the unique {@code scan_id}.
  */

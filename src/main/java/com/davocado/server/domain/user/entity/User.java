@@ -19,7 +19,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 /**
  * A registered user (self-signup with email / password).
  *
- * <p>See {@code D-avocado_DB_명세서_v0.2.md} section 2.1.
+ * <p>See {@code docs/Database.md} (d-avocado repo) section 2.1.
  */
 @Entity
 @Table(name = "users")

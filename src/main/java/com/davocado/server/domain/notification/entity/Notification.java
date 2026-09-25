@@ -29,7 +29,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 /**
  * A scheduled (and eventually sent) push notification for a scan approaching its target ripeness.
  *
- * <p>See {@code D-avocado_DB_명세서_v1.md} section 2.4. At most one notification per scan.
+ * <p>See {@code docs/Database.md} (d-avocado repo) section 2.4. At most one notification per scan.
  * {@code scheduledAt} is {@code estimatedPeakDate} minus the user's {@code advanceNoticeDays};
  * delivery is a real FCM/APNs push sent to {@code users.pushToken}. Deleting the parent scan
  * cascades and removes its notifications, {@code sent} rows included.
